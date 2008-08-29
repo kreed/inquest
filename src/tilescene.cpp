@@ -29,12 +29,11 @@
 TileScene::TileScene(QObject *parent)
 	: QGraphicsScene(parent)
 	, _groupSize(16)
-	, _showCorrect(true)
-	, _autoCheck(true)
 	, _wordsLocked(false)
 	, _meaningsLocked(false)
 	, _wordMode(Sort)
 	, _meaningMode(Shuffle)
+	, _placeMode(AutoCheck)
 {
 	connect(qApp, SIGNAL(lastWindowClosed()),
 	        this, SLOT(dumpState()));
@@ -171,7 +170,7 @@ void TileScene::add()
 {
 	while (_words.size() != _groupSize && !_bank.isEmpty()) {
 		StringPair pair = _bank.takeAt(rand() % _bank.size());
-		addTile(pair.first, _words, !_wordsLocked)->pair(addTile(pair.second, _meanings, !_meaningsLocked),
+		addTile(pair.first, _words, !_wordsLocked)->init(addTile(pair.second, _meanings, !_meaningsLocked),
 		                                  matcher(_meanings, pair.second));
 	}
 
@@ -203,7 +202,7 @@ void TileScene::layout(QList<Tile*> &tiles, LayoutMode mode, int margin)
 
 void TileScene::removeWord(Tile *word)
 {
-	if (word->isCorrect())
+	if (word->isCounted())
 		--_correctCount;
 	word->setPair(NULL);
 	word->pair()->setPair(NULL);
@@ -234,19 +233,23 @@ void TileScene::layout()
 void TileScene::onPair(Tile *tile, Tile *pair)
 {
 	_correctCount += pair ? 1 : -1;
-	if (_showCorrect && _autoCheck) {
-		tile->setPair(pair);
+	tile->setPair(pair);
+	if (_placeMode == AutoCheck) {
+		if (pair) {
+			tile->showCorrect();
+			pair->showCorrect();
+		}
 		updateCount();
 	} else if (_correctCount == _words.size())
-		check();
+		reveal();
 }
 
 void TileScene::checkAdvance()
 {
 	if (_correctCount == _words.size())
 		advance();
-	else if (_showCorrect)
-		check();
+	else if (_placeMode != NoCheck)
+		reveal();
 }
 
 void TileScene::addOne()
@@ -270,28 +273,28 @@ void TileScene::removeOne()
 	}
 }
 
-void TileScene::check()
+void TileScene::reveal()
 {
 	foreach (Tile *tile, _words)
-		tile->setPair(tile->testPair());
+		if (tile->isCounted())
+			tile->showCorrect();
 	foreach (Tile *tile, _meanings)
-		tile->setPair(tile->testPair());
+		if (tile->isCounted())
+			tile->showCorrect();
 	updateCount();
 }
 
-void TileScene::toggleShowCorrect()
+void TileScene::setPlacement(PlacementMode mode)
 {
-	if (_showCorrect && _correctCount != _words.size()) {
-		foreach (Tile *tile, _words)
-			tile->setPair(NULL);
-		emit countChanged(0, _words.size() + _bank.size());
+	if (mode != _placeMode) {
+		if (mode == NoCheck && _correctCount != _words.size()) {
+			foreach (Tile *tile, _words)
+				tile->setPair(NULL);
+			emit countChanged(0, _words.size() + _bank.size());
+		} else if (_placeMode == NoCheck && mode == AutoCheck)
+			reveal();
+		_placeMode = mode;
 	}
-	_showCorrect = !_showCorrect;
-}
-
-void TileScene::toggleAutoCheck()
-{
-	_autoCheck = !_autoCheck;
 }
 
 void TileScene::setWordsSorted()

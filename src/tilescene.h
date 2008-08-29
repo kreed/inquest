@@ -33,13 +33,16 @@ public:
 		Sort,
 		Shuffle
 	};
+	enum PlacementMode {
+		AutoCheck,
+		ManualCheck,
+		NoCheck
+	};
 
 	TileScene(QObject *parent = NULL);
 
 	QString stateFile() const;
 	void init();
-	inline bool showCorrect() const { return _showCorrect; }
-	inline bool autoCheck() const { return _autoCheck; }
 	inline LayoutMode wordMode() const { return _wordMode; }
 	inline LayoutMode meaningMode() const { return _meaningMode; }
 
@@ -62,10 +65,12 @@ public slots:
 	void setWordsShuffled();
 	void setMeaningsSorted();
 	void setMeaningsShuffled();
-	void toggleAutoCheck();
-	void toggleShowCorrect();
 	void toggleWordsLocked();
 	void toggleMeaningsLocked();
+	void setPlacement(PlacementMode);
+	void setPlacementAuto() { setPlacement(AutoCheck); }
+	void setPlacementManual() { setPlacement(ManualCheck); }
+	void setPlacementNo() { setPlacement(NoCheck); }
 
 protected slots:
 	void onPair(Tile*, Tile*);
@@ -74,14 +79,12 @@ private:
 	void add();
 	Tile *addTile(const QString &text, QList<Tile*> &list, bool movable);
 	void advance();
-	void check();
+	void reveal();
 	void layout(QList<Tile*> &tiles, LayoutMode mode, int margin);
 	void updateCount();
 	void removeWord(Tile *tile);
 
 	int _groupSize;
-	bool _showCorrect;
-	bool _autoCheck;
 	int _correctCount;
 	bool _wordsLocked;
 	bool _wordsShown;
@@ -89,6 +92,7 @@ private:
 	bool _meaningsShown;
 	LayoutMode _wordMode;
 	LayoutMode _meaningMode;
+	PlacementMode _placeMode;
 
 	QList<StringPair> _bank;
 	QList<Tile*> _words;

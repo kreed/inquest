@@ -29,6 +29,16 @@
 
 MainWindow *mainWindow;
 
+void addToggle(QMenu *menu, QActionGroup *group, const QString &text,
+               QObject *recv, const char *member, bool checked = false)
+{
+	QAction *action = menu->addAction(text, recv, member);
+	action->setCheckable(true);
+	if (checked)
+		action->setChecked(true);
+	group->addAction(action);
+}
+
 MainWindow::MainWindow()
 	: QMainWindow()
 	, _scene(new TileScene(this))
@@ -97,16 +107,12 @@ MainWindow::MainWindow()
 	shuffle->setCheckable(true);
 	(_scene->meaningMode() == TileScene::Sort ? sort : shuffle)->setChecked(true);
 
-	settings->addSeparator();
+	settings->addSeparator()->setText("Checking Mode");
 
-	QAction *check;
-	check = settings->addAction("Show Correctness", _scene, SLOT(toggleShowCorrect()));
-	check->setCheckable(true);
-	check->setChecked(_scene->showCorrect());
-	check = settings->addAction("Check on Place", _scene, SLOT(toggleAutoCheck()));
-	check->setCheckable(true);
-	check->setChecked(_scene->autoCheck());
-
+	group = new QActionGroup(this);
+	addToggle(settings, group, "Check on Place", _scene, SLOT(setPlacementAuto()), true);
+	addToggle(settings, group, "Check on Space Press", _scene, SLOT(setPlacementManual()));
+	addToggle(settings, group, "Check when All Correct", _scene, SLOT(setPlacementNo()));
 
 	menu->addAction("Check/Advance", _scene, SLOT(checkAdvance()))
 		->setShortcut(QKeySequence("Space"));

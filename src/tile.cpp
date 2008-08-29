@@ -74,12 +74,21 @@ void Tile::setPair(Tile *other)
 	if (other && other->_currentPair != this)
 		other->setPair(this);
 
-	setDefaultTextColor(other ? QColor(0, 255, 0, 85) : Qt::black);
-	setFlag(QGraphicsItem::ItemIsMovable, _movable && !other);
-	update();
+	if (!other && _correctShown)
+		showCorrect(false);
 }
 
-void Tile::pair(Tile *other, Tile *dupDef)
+void Tile::showCorrect(bool shown)
+{
+	if (shown != _correctShown) {
+		setDefaultTextColor(shown ? QColor(0, 255, 0, 85) : Qt::black);
+		setFlag(QGraphicsItem::ItemIsMovable, !shown);
+		_correctShown = shown;
+		update();
+	}
+}
+
+void Tile::init(Tile *other, Tile *dupDef)
 {
 	_pair = other;
 	other->_pair = this;

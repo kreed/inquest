@@ -28,11 +28,14 @@ public:
 	Tile(const QString &text, bool locked);
 	~Tile();
 
-	void pair(Tile *other, Tile *duplicate);
+	void init(Tile *other, Tile *duplicate);
+
 	Tile *testPair() const;
 	void setPair(Tile *other);
-	inline bool isCorrect() const { return _currentPair; }
+	inline bool isCounted() const { return _currentPair; }
+	bool isCorrect() const { return _currentPair && _correctShown; }
 	inline Tile *pair() const { return _pair; }
+	void showCorrect(bool shown = true);
 
 	static bool lessThan(Tile *a, Tile *b);
 
@@ -48,6 +51,7 @@ private:
 	Tile *_currentPair;
 	bool _moved;
 	bool _movable;
+	bool _correctShown;
 };
 
 
