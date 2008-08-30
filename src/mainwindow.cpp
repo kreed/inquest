@@ -53,7 +53,7 @@ static void addTileMenu(QMenu *parent, TileGroup *tiles, const QString &text)
 MainWindow::MainWindow()
 	: QMainWindow()
 	, _scene(new TileScene(this))
-	, _view(new QGraphicsView(_scene))
+	, _view(new TileView(_scene))
 {
 	setCentralWidget(_view);
 
@@ -131,11 +131,6 @@ void MainWindow::zoomOut()
 	_view->scale(0.8, 0.8);
 }
 
-void MainWindow::mouseDoubleClickEvent(QMouseEvent*)
-{
-	_scene->checkAdvance();
-}
-
 void MainWindow::wheelEvent(QWheelEvent *ev)
 {
 	if (ev->orientation() == Qt::Vertical) {
@@ -159,4 +154,14 @@ void MainWindow::wheelEvent(QWheelEvent *ev)
 void MainWindow::updateCount(int correct, int remaining)
 {
 	_count->setText(QString("%1/%2").arg(correct).arg(remaining));
+}
+
+TileView::TileView(TileScene *scene)
+	: QGraphicsView(scene)
+{
+}
+
+void TileView::mouseDoubleClickEvent(QMouseEvent*)
+{
+	static_cast<TileScene*>(scene())->checkAdvance();
 }

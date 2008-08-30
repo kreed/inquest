@@ -19,6 +19,7 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include <QGraphicsView>
 #include <QMainWindow>
 
 class QAction;
@@ -37,13 +38,21 @@ public slots:
 	void updateCount(int correct, int remaining);
 
 protected:
-	void mouseDoubleClickEvent(QMouseEvent*);
 	void wheelEvent(QWheelEvent*);
 
 private:
 	TileScene *_scene;
 	QGraphicsView *_view;
 	QAction *_count;
+};
+
+class TileView : public QGraphicsView {
+	Q_OBJECT
+public:
+	TileView(TileScene *scene);
+
+protected:
+	void mouseDoubleClickEvent(QMouseEvent*);
 };
 
 extern MainWindow *mainWindow;
