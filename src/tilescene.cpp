@@ -174,7 +174,12 @@ void TileScene::removeWord(Tile *word)
 
 void TileScene::layout()
 {
-	if (_correctCount && _correctCount != _words->size()) {
+	if (_correctCount == _words->size()) {
+		_correctCount = 0;
+		foreach (Tile *tile, _words->_tiles)
+			tile->setPair(NULL);
+		updateCount();
+	} else if (_correctCount) {
 		foreach (Tile *tile, _words->_tiles)
 			if (tile->isCorrect())
 				removeWord(tile);
