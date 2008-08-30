@@ -16,27 +16,37 @@
  */
 
 #include "mainwindow.h"
-
 #include <QAction>
 #include <QApplication>
 #include <QGraphicsView>
-#include <QLabel>
 #include <QMenuBar>
 #include <QToolBar>
 #include <QWheelEvent>
-#include <QWidgetAction>
+#include "tilegroup.h"
 #include "tilescene.h"
 
 MainWindow *mainWindow;
 
-void addToggle(QMenu *menu, QActionGroup *group, const QString &text,
-               QObject *recv, const char *member, bool checked = false)
+static void addToggle(QMenu *menu, const QString &text, QObject *recv,
+                      const char *member, QActionGroup *group = NULL, bool checked = true)
 {
 	QAction *action = menu->addAction(text, recv, member);
 	action->setCheckable(true);
 	if (checked)
 		action->setChecked(true);
-	group->addAction(action);
+	if (group)
+		group->addAction(action);
+}
+
+static void addTileMenu(QMenu *parent, TileGroup *tiles, const QString &text)
+{
+	QMenu *menu = parent->addMenu(text);
+	addToggle(menu, "Movable", tiles, SLOT(toggleMovable()));
+	addToggle(menu, "Visible", tiles, SLOT(toggleVisible()));
+	menu->addSeparator()->setText("Order Mode");
+	QActionGroup *group = new QActionGroup(menu);
+	addToggle(menu, "Sort", tiles, SLOT(setSorted()), group, tiles->layoutMode() == TileGroup::Sort);
+	addToggle(menu, "Shuffle", tiles, SLOT(setShuffled()), group, tiles->layoutMode() == TileGroup::Shuffle);
 }
 
 MainWindow::MainWindow()
@@ -85,34 +95,16 @@ MainWindow::MainWindow()
 
 	QMenu *settings = menu->addMenu("Settings");
 
-	QMenu *mode = settings->addMenu("Words");
-	mode->addAction("Locked", _scene, SLOT(toggleWordsLocked()))
-		->setCheckable(true);
-	mode->addSeparator()->setText("Order Mode");
-	QActionGroup *group = new QActionGroup(this);
-	QAction *sort = group->addAction(mode->addAction("Sort", _scene, SLOT(setWordsSorted())));
-	QAction *shuffle = group->addAction(mode->addAction("Shuffle", _scene, SLOT(setWordsShuffled())));
-	sort->setCheckable(true);
-	shuffle->setCheckable(true);
-	(_scene->wordMode() == TileScene::Sort ? sort : shuffle)->setChecked(true);
-
-	mode = settings->addMenu("Meanings");
-	mode->addAction("Locked", _scene, SLOT(toggleMeaningsLocked()))
-		->setCheckable(true);
-	mode->addSeparator()->setText("Order Mode");
-	group = new QActionGroup(this);
-	sort = group->addAction(mode->addAction("Sort", _scene, SLOT(setMeaningsSorted())));
-	shuffle = group->addAction(mode->addAction("Shuffle", _scene, SLOT(setMeaningsShuffled())));
-	sort->setCheckable(true);
-	shuffle->setCheckable(true);
-	(_scene->meaningMode() == TileScene::Sort ? sort : shuffle)->setChecked(true);
+	addTileMenu(settings, _scene->words(), "Words");
+	addTileMenu(settings, _scene->meanings(), "Meanings");
 
 	settings->addSeparator()->setText("Checking Mode");
 
-	group = new QActionGroup(this);
-	addToggle(settings, group, "Check on Place", _scene, SLOT(setPlacementAuto()), true);
-	addToggle(settings, group, "Check on Space Press", _scene, SLOT(setPlacementManual()));
-	addToggle(settings, group, "Check when All Correct", _scene, SLOT(setPlacementNo()));
+	QActionGroup *group = new QActionGroup(this);
+	addToggle(settings, "Check on Place", _scene, SLOT(setPlacementAuto()), group);
+	addToggle(settings, "Check on Space Press", _scene, SLOT(setPlacementManual()), group, false);
+	addToggle(settings, "Check when All Correct", _scene, SLOT(setPlacementNo()), group, false);
+
 
 	menu->addAction("Check/Advance", _scene, SLOT(checkAdvance()))
 		->setShortcut(QKeySequence("Space"));

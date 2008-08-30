@@ -15,8 +15,6 @@
  * See <http://www.gnu.org/licenses/> for the full license text.
  */
 
-#include "tilescene.h"
-
 #include "mainwindow.h"
 #include <QApplication>
 #include <QDir>
@@ -24,19 +22,20 @@
 #include <QMessageBox>
 #include <QPair>
 #include <QTextStream>
+#include "tilegroup.h"
 #include "tile.h"
+#include "tilescene.h"
 
 TileScene::TileScene(QObject *parent)
 	: QGraphicsScene(parent)
 	, _groupSize(16)
-	, _wordsLocked(false)
-	, _meaningsLocked(false)
-	, _wordMode(Sort)
-	, _meaningMode(Shuffle)
 	, _placeMode(AutoCheck)
+	, _words(new TileGroup(this))
+	, _meanings(new TileGroup(this))
 {
 	connect(qApp, SIGNAL(lastWindowClosed()),
 	        this, SLOT(dumpState()));
+	_words->_layout = TileGroup::Sort;
 }
 
 void TileScene::quitNow()
@@ -107,7 +106,7 @@ void TileScene::dump()
 
 void TileScene::dumpState()
 {
-	if (_bank.isEmpty() && _words.isEmpty())
+	if (_bank.isEmpty() && _words->_tiles.isEmpty())
 		QFile::remove(stateFile());
 	else
 		dump(stateFile());
@@ -123,7 +122,7 @@ void TileScene::dump(const QString &file)
 
 	foreach(StringPair pair, _bank)
 		out << pair.first << '\t' << pair.second << '\n';
-	foreach(Tile *tile, _words)
+	foreach(Tile *tile, _words->_tiles)
 		if (!tile->isCorrect())
 			out << tile->toPlainText() << '\t' << tile->pair()->toPlainText() << '\n';
 
@@ -132,34 +131,21 @@ void TileScene::dump(const QString &file)
 
 void TileScene::updateCount()
 {
-	emit countChanged(_correctCount, _words.size() + _bank.size() - _correctCount);
+	emit countChanged(_correctCount, _words->size() + _bank.size() - _correctCount);
 }
 
 void TileScene::advance()
 {
 	_correctCount = 0;
-	foreach (Tile *tile, _words)
-		delete tile;
-	foreach (Tile *tile, _meanings)
-		delete tile;
-	_words.clear();
-	_meanings.clear();
+	_words->clear();
+	_meanings->clear();
 	add();
 	updateCount();
 }
 
-static Tile *matcher(const QList<Tile*> &list, const QString &meaning)
+Tile *TileScene::addTile(const QString &text, TileGroup *group)
 {
-	foreach (Tile *tile, list)
-		if (tile->toPlainText() == meaning)
-			return tile;
-	return NULL;
-}
-
-Tile *TileScene::addTile(const QString &text, QList<Tile*> &list, bool movable)
-{
-	Tile *tile = new Tile(text, movable);
-	list.append(tile);
+	Tile *tile = group->addTile(text);
 	connect(tile, SIGNAL(newPair(Tile*, Tile*)),
 	        this, SLOT(onPair(Tile*, Tile*)));
 	addItem(tile);
@@ -168,66 +154,39 @@ Tile *TileScene::addTile(const QString &text, QList<Tile*> &list, bool movable)
 
 void TileScene::add()
 {
-	while (_words.size() != _groupSize && !_bank.isEmpty()) {
+	while (_words->size() != _groupSize && !_bank.isEmpty()) {
 		StringPair pair = _bank.takeAt(rand() % _bank.size());
-		addTile(pair.first, _words, !_wordsLocked)->init(addTile(pair.second, _meanings, !_meaningsLocked),
-		                                  matcher(_meanings, pair.second));
+		addTile(pair.first, _words)->init(addTile(pair.second, _meanings),
+		                                  _meanings->whereText(pair.second));
 	}
 
 	layout();
-}
-
-void TileScene::layout(QList<Tile*> &tiles, LayoutMode mode, int margin)
-{
-	QPointF pos(margin, 5);
-
-	if (mode == Shuffle) {
-		QList<Tile*> *copy = new QList<Tile*>(tiles);
-
-		while (!copy->isEmpty()) {
-			copy->takeAt(rand() % copy->size())->setPos(pos);
-			pos.ry() += 40;
-		}
-
-		delete copy;
-	} else {
-		qSort(tiles.begin(), tiles.end(), Tile::lessThan);
-
-		foreach (Tile *tile, tiles) {
-			tile->setPos(pos);
-			pos.ry() += 40;
-		}
-	}
 }
 
 void TileScene::removeWord(Tile *word)
 {
 	if (word->isCounted())
 		--_correctCount;
-	word->setPair(NULL);
-	word->pair()->setPair(NULL);
-	_words.removeOne(word);
-	_meanings.removeOne(word->pair());
-	delete word->pair();
-	delete word;
+	_meanings->removeTile(word->pair());
+	_words->removeTile(word);
 }
 
 void TileScene::layout()
 {
-	if (_correctCount && _correctCount != _words.size()) {
-		foreach (Tile *tile, _words)
+	if (_correctCount && _correctCount != _words->size()) {
+		foreach (Tile *tile, _words->_tiles)
 			if (tile->isCorrect())
 				removeWord(tile);
 		updateCount();
 	}
 
 	qreal edge = 0;
-	foreach (Tile *tile, _words)
+	foreach (Tile *tile, _words->_tiles)
 		if (edge < tile->boundingRect().width())
 			edge = tile->boundingRect().width();
-	
-	layout(_words, _wordMode, 5);
-	layout(_meanings, _meaningMode, (int)edge + 10);
+
+	_words->layout(5);
+	_meanings->layout((int)edge + 10);
 }
 
 void TileScene::onPair(Tile *tile, Tile *pair)
@@ -240,13 +199,13 @@ void TileScene::onPair(Tile *tile, Tile *pair)
 			pair->showCorrect();
 		}
 		updateCount();
-	} else if (_correctCount == _words.size())
+	} else if (_correctCount == _words->size())
 		reveal();
 }
 
 void TileScene::checkAdvance()
 {
-	if (_correctCount == _words.size())
+	if (_correctCount == _words->size())
 		advance();
 	else if (_placeMode != NoCheck)
 		reveal();
@@ -262,12 +221,12 @@ void TileScene::addOne()
 
 void TileScene::removeOne()
 {
-	if (_words.size() > 1) {
-		Tile *word = _words.takeAt(rand() % _words.size());
+	if (_words->size() > 1) {
+		Tile *word = _words->_tiles.at(rand() % _words->size());
 		if (!word->isCorrect())
 			_bank.append(StringPair(word->toPlainText(), word->pair()->toPlainText()));
 		removeWord(word);
-		_groupSize = _words.size();
+		_groupSize = _words->size();
 		layout();
 		updateCount();
 	}
@@ -275,64 +234,20 @@ void TileScene::removeOne()
 
 void TileScene::reveal()
 {
-	foreach (Tile *tile, _words)
-		if (tile->isCounted())
-			tile->showCorrect();
-	foreach (Tile *tile, _meanings)
-		if (tile->isCounted())
-			tile->showCorrect();
+	_words->reveal();
+	_meanings->reveal();
 	updateCount();
 }
 
 void TileScene::setPlacement(PlacementMode mode)
 {
 	if (mode != _placeMode) {
-		if (mode == NoCheck && _correctCount != _words.size()) {
-			foreach (Tile *tile, _words)
-				tile->setPair(NULL);
-			emit countChanged(0, _words.size() + _bank.size());
-		} else if (_placeMode == NoCheck && mode == AutoCheck)
+		if (mode == NoCheck && _correctCount != _words->size()) {
+			_words->reveal(false);
+			_meanings->reveal(false);
+			emit countChanged(0, _words->size() + _bank.size());
+		} else if (mode == AutoCheck)
 			reveal();
 		_placeMode = mode;
 	}
-}
-
-void TileScene::setWordsSorted()
-{
-	_wordMode = Sort;
-	layout();
-}
-
-void TileScene::setWordsShuffled()
-{
-	_wordMode = Shuffle;
-	layout();
-}
-
-void TileScene::setMeaningsSorted()
-{
-	_meaningMode = Sort;
-	layout();
-}
-
-void TileScene::setMeaningsShuffled()
-{
-	_meaningMode = Shuffle;
-	layout();
-}
-
-static void lock(const QList<Tile*> &list, bool state)
-{
-	foreach (Tile *tile, list)
-		tile->setFlag(QGraphicsItem::ItemIsMovable, state);
-}
-
-void TileScene::toggleWordsLocked()
-{
-	lock(_words, !(_wordsLocked = !_wordsLocked));
-}
-
-void TileScene::toggleMeaningsLocked()
-{
-	lock(_meanings, !(_meaningsLocked = !_meaningsLocked));
 }

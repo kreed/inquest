@@ -15,9 +15,9 @@
  * See <http://www.gnu.org/licenses/> for the full license text.
  */
 
-#include <QApplication>
-#include "mainwindow.h"
 #include <ctime>
+#include "mainwindow.h"
+#include <QApplication>
 
 int main(int argc, char **argv)
 {

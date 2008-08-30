@@ -25,17 +25,18 @@ template<class K, class V> class QPair;
 class Tile : public QGraphicsTextItem {
 	Q_OBJECT
 public:
-	Tile(const QString &text, bool locked);
+	Tile(const QString &text, bool movable, bool visible);
 	~Tile();
 
 	void init(Tile *other, Tile *duplicate);
 
 	Tile *testPair() const;
-	void setPair(Tile *other);
 	inline bool isCounted() const { return _currentPair; }
 	bool isCorrect() const { return _currentPair && _correctShown; }
 	inline Tile *pair() const { return _pair; }
 	void showCorrect(bool shown = true);
+	void setPair(Tile *other);
+	void setMovable(bool movable);
 
 	static bool lessThan(Tile *a, Tile *b);
 
@@ -53,6 +54,5 @@ private:
 	bool _movable;
 	bool _correctShown;
 };
-
 
 #endif

@@ -21,6 +21,7 @@
 #include <QGraphicsScene>
 
 class Tile;
+class TileGroup;
 template<class K, class V> class QPair;
 template<class T> class QList;
 
@@ -29,10 +30,6 @@ typedef QPair<QString, QString> StringPair;
 class TileScene : public QGraphicsScene {
 	Q_OBJECT
 public:
-	enum LayoutMode {
-		Sort,
-		Shuffle
-	};
 	enum PlacementMode {
 		AutoCheck,
 		ManualCheck,
@@ -43,8 +40,9 @@ public:
 
 	QString stateFile() const;
 	void init();
-	inline LayoutMode wordMode() const { return _wordMode; }
-	inline LayoutMode meaningMode() const { return _meaningMode; }
+
+	inline TileGroup *words() const { return _words; }
+	inline TileGroup *meanings() const { return _meanings; }
 
 signals:
 	void countChanged(int correct, int remaining);
@@ -61,12 +59,6 @@ public slots:
 	void dump(const QString&);
 	void layout();
 	void quitNow();
-	void setWordsSorted();
-	void setWordsShuffled();
-	void setMeaningsSorted();
-	void setMeaningsShuffled();
-	void toggleWordsLocked();
-	void toggleMeaningsLocked();
 	void setPlacement(PlacementMode);
 	void setPlacementAuto() { setPlacement(AutoCheck); }
 	void setPlacementManual() { setPlacement(ManualCheck); }
@@ -77,26 +69,19 @@ protected slots:
 
 private:
 	void add();
-	Tile *addTile(const QString &text, QList<Tile*> &list, bool movable);
+	Tile *addTile(const QString &text, TileGroup *group);
 	void advance();
 	void reveal();
-	void layout(QList<Tile*> &tiles, LayoutMode mode, int margin);
 	void updateCount();
 	void removeWord(Tile *tile);
 
 	int _groupSize;
 	int _correctCount;
-	bool _wordsLocked;
-	bool _wordsShown;
-	bool _meaningsLocked;
-	bool _meaningsShown;
-	LayoutMode _wordMode;
-	LayoutMode _meaningMode;
 	PlacementMode _placeMode;
 
 	QList<StringPair> _bank;
-	QList<Tile*> _words;
-	QList<Tile*> _meanings;
+	TileGroup *_words;
+	TileGroup *_meanings;
 };
 
 #endif

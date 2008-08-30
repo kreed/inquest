@@ -17,14 +17,15 @@
 
 #include "tile.h"
 
-Tile::Tile(const QString &text, bool movable)
+Tile::Tile(const QString &text, bool movable, bool visible)
 	: QGraphicsTextItem(text)
 	, _duplicatePairs(NULL)
 	, _currentPair(NULL)
 	, _moved(false)
-	, _movable(movable)
+	, _correctShown(false)
 {
-	setFlag(QGraphicsItem::ItemIsMovable, movable);
+	setMovable(movable);
+	setVisible(visible);
 }
 
 Tile::~Tile()
@@ -114,4 +115,10 @@ void Tile::init(Tile *other, Tile *dupDef)
 bool Tile::lessThan(Tile *a, Tile *b)
 {
 	return a->toPlainText() < b->toPlainText();
+}
+
+void Tile::setMovable(bool movable)
+{
+	setFlag(QGraphicsItem::ItemIsMovable, movable && !_correctShown);
+	_movable = movable;
 }
