@@ -19,12 +19,10 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include <QGraphicsView>
 #include <QMainWindow>
 
 class QAction;
 class QGraphicsView;
-class QLabel;
 class TileScene;
 
 class MainWindow : public QMainWindow {
@@ -44,15 +42,6 @@ private:
 	TileScene *_scene;
 	QGraphicsView *_view;
 	QAction *_count;
-};
-
-class TileView : public QGraphicsView {
-	Q_OBJECT
-public:
-	TileView(TileScene *scene);
-
-protected:
-	void mouseDoubleClickEvent(QMouseEvent*);
 };
 
 extern MainWindow *mainWindow;

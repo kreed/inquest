@@ -257,3 +257,8 @@ void TileScene::setPlacement(PlacementMode mode)
 		_placeMode = mode;
 	}
 }
+
+void TileScene::mouseDoubleClickEvent(QGraphicsSceneMouseEvent*)
+{
+	checkAdvance();
+}

@@ -68,6 +68,9 @@ public slots:
 protected slots:
 	void onPair(Tile*, Tile*);
 
+protected:
+	void mouseDoubleClickEvent(QGraphicsSceneMouseEvent*);
+
 private:
 	void add();
 	Tile *addTile(const QString &text, TileGroup *group);
