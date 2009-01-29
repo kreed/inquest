@@ -1,5 +1,5 @@
 /*
- * Copyright © 2008 Christopher Eby <kreed@kreed.org>
+ * Copyright © 2008-2009 Christopher Eby <kreed@kreed.org>
  *
  * This file is part of Inquest.
  *
@@ -16,27 +16,60 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "col.h"
 #include "mainwindow.h"
 #include <QApplication>
 #include <QDir>
 #include <QFileDialog>
+#include <QGraphicsSceneWheelEvent>
 #include <QMessageBox>
-#include <QPair>
 #include <QTextStream>
-#include "tilegroup.h"
+#include "row.h"
 #include "tile.h"
 #include "tilescene.h"
 
 TileScene::TileScene(QObject *parent)
 	: QGraphicsScene(parent)
-	, _groupSize(16)
+	, _colCount(0)
+	, _rowCount(16)
+	, _curRowCount(0)
 	, _placeMode(AutoCheck)
-	, _words(new TileGroup(this))
-	, _meanings(new TileGroup(this))
 {
 	connect(qApp, SIGNAL(lastWindowClosed()),
 	        this, SLOT(dumpState()));
-	_words->_layout = TileGroup::Sort;
+}
+
+void TileScene::init()
+{
+	setColCount(2);
+	connect(_cols.at(0), SIGNAL(itemCountChanged(int)),
+	        this, SLOT(setRowCount(int)));
+	fillState(false);
+}
+
+void TileScene::setRowCount(int v)
+{
+	_curRowCount = v;
+}
+
+void TileScene::updateCounts()
+{
+	if (_correctCount == _curRowCount)
+		emit countChanged(_correctCount, _bank.size());
+	else if (_placeMode == NoCheck)
+		emit countChanged(-1, _curRowCount + _bank.size());
+	else
+		emit countChanged(_correctCount, _curRowCount + _bank.size() - _correctCount);
+}
+
+void TileScene::shiftCorrectCount(int delta)
+{
+	if (delta == 0)
+		_correctCount = 0;
+	else
+		_correctCount += delta;
+
+	updateCounts();
 }
 
 void TileScene::quitNow()
@@ -51,15 +84,9 @@ QString TileScene::stateFile() const
 	return QDir::homePath() + "/.config/inquest.state";
 }
 
-void TileScene::init()
-{
-	if (fill(stateFile(), false))
-		advance();
-}
-
 void TileScene::fill()
 {
-	QStringList files = QFileDialog::getOpenFileNames(mainWindow, QString(), QString(), "Tab-separated values (*.tsv)");
+	QStringList files = QFileDialog::getOpenFileNames(MainWindow::instance, QString(), QString(), "Tab-separated values (*.tsv);;All Files (*)");
 	if (!files.isEmpty()) {
 		foreach (QString file, files)
 			if (!fill(file))
@@ -69,9 +96,9 @@ void TileScene::fill()
 	}
 }
 
-void TileScene::fillState()
+void TileScene::fillState(bool error)
 {
-	if (fill(stateFile()))
+	if (fill(stateFile(), error))
 		advance();
 }
 
@@ -80,34 +107,44 @@ bool TileScene::fill(const QString &file, bool showError)
 	QFile store(file);
 	if (!store.open(QFile::ReadOnly)) {
 		if (showError)
-			QMessageBox::warning(mainWindow, "Error reading file", store.errorString());
+			QMessageBox::critical(MainWindow::instance, "Error reading file", store.errorString());
 		return false;
 	}
 
 	_bank.clear();
 	QTextStream in(&store);
 
-	while (!in.atEnd()) {
-		QStringList toks = in.readLine().split('\t');
-		if (toks.count() == 2)
-			_bank.append(StringPair(toks[0], toks[1]));
+	QString line = in.readLine();
+
+	int count = line.count('\t');
+	if (count < 1) {
+		if (showError)
+			QMessageBox::critical(MainWindow::instance, "Error reading file", "File '" + file + "' does not look like a tab-separated value file.");
+		return false;
 	}
 
+	do {
+		if (line.count('\t') >= count)
+			_bank.append(line);
+	} while (!(line = in.readLine()).isEmpty());
+
 	store.close();
+
+	setColCount(count + 1);
 
 	return true;
 }
 
 void TileScene::dump()
 {
-	QString file = QFileDialog::getSaveFileName(mainWindow, QString(), QString(), "Tab-separated values (*.tsv)");
+	QString file = QFileDialog::getSaveFileName(MainWindow::instance, QString(), QString(), "Tab-separated values (*.tsv)");
 	if (!file.isEmpty())
 		dump();
 }
 
 void TileScene::dumpState()
 {
-	if (_bank.isEmpty() && _words->_tiles.isEmpty())
+	if (_bank.isEmpty() && !_curRowCount)
 		QFile::remove(stateFile());
 	else
 		dump(stateFile());
@@ -117,101 +154,129 @@ void TileScene::dump(const QString &file)
 {
 	QFile store(file);
 	if (!store.open(QFile::WriteOnly))
-		QMessageBox::warning(mainWindow, "Error writing file", store.errorString());
-	
+		QMessageBox::critical(MainWindow::instance, "Error writing file", store.errorString());
+
 	QTextStream out(&store);
 
-	foreach(StringPair pair, _bank)
-		out << pair.first << '\t' << pair.second << '\n';
-	foreach(Tile *tile, _words->_tiles)
-		if (!tile->isCorrect())
-			out << tile->toPlainText() << '\t' << tile->pair()->toPlainText() << '\n';
+	foreach(const QString entry, _bank)
+		out << entry << '\n';
+	foreach(Tile *tile, *_cols.at(0)->tiles())
+		if (!tile->isShownCorrect())
+			out << tile->entry() << '\n';
 
 	store.close();
 }
 
-void TileScene::updateCount()
-{
-	emit countChanged(_correctCount, _words->size() + _bank.size() - _correctCount);
-}
-
 void TileScene::advance()
 {
-	_correctCount = 0;
-	_words->clear();
-	_meanings->clear();
+	foreach (Col *col, _cols)
+		col->clear();
 	add();
-	updateCount();
+	shiftCorrectCount(0);
+	layout();
 }
 
-Tile *TileScene::addTile(const QString &text, TileGroup *group)
+Tile *TileScene::addTile(const QString &text, Col *group)
 {
 	Tile *tile = group->addTile(text);
-	connect(tile, SIGNAL(newPair(Tile*, Tile*)),
-	        this, SLOT(onPair(Tile*, Tile*)));
+	connect(tile, SIGNAL(newRow(Row*)),
+	        this, SLOT(onBind(Row*)));
 	addItem(tile);
 	return tile;
 }
 
 void TileScene::add()
 {
-	while (_words->size() != _groupSize && !_bank.isEmpty()) {
-		StringPair pair = _bank.takeAt(rand() % _bank.size());
-		addTile(pair.first, _words)->init(addTile(pair.second, _meanings),
-		                                  _meanings->whereText(pair.second));
+	while (_curRowCount != _rowCount && !_bank.isEmpty()) {
+		QStringList entry = _bank.takeAt(rand() % _bank.size()).split('\t');
+		Row *row = new Row;
+		for (int i = 0; i != _colCount; ++i)
+			row->append(addTile(entry[i], _cols[i]));
+		row->makeDefault();
 	}
 
-	layout();
+	place();
 }
 
-void TileScene::removeWord(Tile *word)
+void TileScene::removeTile(Tile *tile)
 {
-	if (word->isCounted())
-		--_correctCount;
-	_meanings->removeTile(word->pair());
-	_words->removeTile(word);
+	bool correct = tile->isCorrect();
+	tile->defaultRow()->destroyTiles();
+	if (correct)
+		shiftCorrectCount(-1);
+}
+
+void TileScene::stripCorrect()
+{
+	if (!_correctCount)
+		return;
+
+	foreach (Tile *tile, *_cols.at(0)->tiles())
+		if (tile->isShownCorrect())
+			removeTile(tile);
+
+	shiftCorrectCount(0);
 }
 
 void TileScene::layout()
 {
-	if (_correctCount == _words->size()) {
-		_correctCount = 0;
-		foreach (Tile *tile, _words->_tiles)
-			tile->setPair(NULL);
-		updateCount();
-	} else if (_correctCount) {
-		foreach (Tile *tile, _words->_tiles)
-			if (tile->isCorrect())
-				removeWord(tile);
-		updateCount();
+	if (_correctCount == _curRowCount) {
+		reset();
+		return;
 	}
 
-	qreal edge = 0;
-	foreach (Tile *tile, _words->_tiles)
-		if (edge < tile->boundingRect().width())
-			edge = tile->boundingRect().width();
+	stripCorrect();
 
-	_words->layout(5);
-	_meanings->layout((int)edge + 10);
+	foreach (Col *col, _cols)
+		col->layout();
+
+	place();
 }
 
-void TileScene::onPair(Tile *tile, Tile *pair)
+void TileScene::place()
 {
-	_correctCount += pair ? 1 : -1;
-	tile->setPair(pair);
-	if (_placeMode == AutoCheck) {
-		if (pair) {
-			tile->showCorrect();
-			pair->showCorrect();
-		}
-		updateCount();
-	} else if (_correctCount == _words->size())
+	qreal tileWidth = 0;
+	foreach (Col *group, _cols)
+		tileWidth += group->width();
+
+	qreal xstep = qMax(10.0, (width() - tileWidth) / (_colCount - 1));
+	tileWidth = 0;
+
+	foreach (Col *group, _cols) {
+		group->place(tileWidth, 0);
+		tileWidth += group->width() + xstep;
+	}
+
+	setSceneRect(0, 0, tileWidth - xstep, _cols.at(0)->height());
+}
+
+void TileScene::reset()
+{
+	_cols.at(0)->reset();
+	place();
+	shiftCorrectCount(0);
+}
+
+void TileScene::skip()
+{
+	foreach (Tile *tile, *_cols.at(0)->tiles())
+		if (!tile->isShownCorrect())
+			_bank.append(tile->entry());
+	advance();
+}
+
+void TileScene::onBind(Row *row)
+{
+	shiftCorrectCount(row ? 1 : -1);
+	if (_placeMode == AutoCheck && row)
+		row->showCorrect();
+	else if (_correctCount == _curRowCount)
 		reveal();
 }
 
 void TileScene::checkAdvance()
 {
-	if (_correctCount == _words->size())
+	if (_correctCount == _curRowCount)
 		advance();
 	else if (_placeMode != NoCheck)
 		reveal();
@@ -220,45 +285,55 @@ void TileScene::checkAdvance()
 void TileScene::addOne()
 {
 	if (!_bank.isEmpty()) {
-		++_groupSize;
+		++_rowCount;
 		add();
 	}
 }
 
 void TileScene::removeOne()
 {
-	if (_words->size() > 1) {
-		Tile *word = _words->_tiles.at(rand() % _words->size());
-		if (!word->isCorrect())
-			_bank.append(StringPair(word->toPlainText(), word->pair()->toPlainText()));
-		removeWord(word);
-		_groupSize = _words->size();
-		layout();
-		updateCount();
+	if (_curRowCount > 1) {
+		Tile *tile = _cols.at(0)->randTile();
+		if (!tile->isShownCorrect())
+			_bank.append(tile->entry());
+		removeTile(tile);
+		_rowCount = _curRowCount;
+		place();
 	}
 }
 
-void TileScene::reveal()
+void TileScene::reveal(bool show)
 {
-	_words->reveal();
-	_meanings->reveal();
-	updateCount();
+	foreach (Col *group, _cols)
+		group->reveal(show);
+	updateCounts();
+}
+
+void TileScene::setColCount(int count)
+{
+	if (count > _colCount)
+		for (int i = _colCount; i != count; ++i) {
+			Col *col = new Col(this, i, i ? Col::Shuffle : Col::Sort);
+			_cols.append(col);
+			emit addRemoveGroup(col);
+		}
+	else if (count < _colCount)
+		for (int i = count; i != _colCount; ++i) {
+			delete _cols.takeLast();
+			emit addRemoveGroup(NULL);
+		}
+
+	_colCount = count;
 }
 
 void TileScene::setPlacement(PlacementMode mode)
 {
 	if (mode != _placeMode) {
-		if (mode == NoCheck && _correctCount != _words->size()) {
-			_words->reveal(false);
-			_meanings->reveal(false);
-			emit countChanged(0, _words->size() + _bank.size());
-		} else if (mode == AutoCheck)
-			reveal();
 		_placeMode = mode;
+		if (mode == NoCheck && _correctCount != _curRowCount)
+			reveal(false);
+		else if (mode == AutoCheck)
+			reveal();
+		updateCounts();
 	}
-}
-
-void TileScene::mouseDoubleClickEvent(QGraphicsSceneMouseEvent*)
-{
-	checkAdvance();
 }

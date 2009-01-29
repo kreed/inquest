@@ -1,5 +1,5 @@
 /*
- * Copyright © 2008 Christopher Eby <kreed@kreed.org>
+ * Copyright © 2008-2009 Christopher Eby <kreed@kreed.org>
  *
  * This file is part of Inquest.
  *
@@ -16,16 +16,17 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef TILEGROUP_H
-#define TILEGROUP_H
+#ifndef COL_H
+#define COL_H
 
 #include <QObject>
 
+class Row;
 class Tile;
 class TileScene;
 template<class T> class QList;
 
-class TileGroup : public QObject {
+class Col : public QObject {
 	Q_OBJECT
 public:
 	enum LayoutMode {
@@ -33,19 +34,31 @@ public:
 		Shuffle
 	};
 
-	TileGroup(TileScene *parent = NULL);
+	Col(TileScene *parent, int group, LayoutMode);
 
-	inline LayoutMode layoutMode() const { return _layout; }
-	void layout(int margin);
 	Tile *addTile(const QString &text);
-	void removeTile(Tile *tile);
+
+	void reset();
+	void reveal(bool shown);
 	void clear();
-	void reveal(bool shown = true);
-	int size() const;
-	Tile *whereText(const QString &text);
+
+	Tile *find(const QString &text);
+	Tile *randTile();
+
+	void layout();
+	void place(int x, int y);
+
+	inline bool movable() const { return _movable; }
+	inline bool visible() const { return _visible; }
+	inline int index() const { return _group; }
+	inline LayoutMode layoutMode() const { return _layout; }
+	inline QList<Tile*> *tiles() { return &_tiles; }
+	inline qreal height() const { return _height; }
+	inline qreal width() const { return _width; }
 
 signals:
 	void layoutChanged();
+	void itemCountChanged(int);
 
 public slots:
 	void toggleMovable();
@@ -53,13 +66,19 @@ public slots:
 	void setSorted();
 	void setShuffled();
 
+protected slots:
+	void removeTile(Tile *tile);
+
 private:
+	void calcWidth();
+
 	QList<Tile*> _tiles;
 	bool _movable;
 	bool _visible;
 	LayoutMode _layout;
-
-	friend class TileScene;
+	int _group;
+	qreal _height;
+	qreal _width;
 };
 
 #endif

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2008 Christopher Eby <kreed@kreed.org>
+ * Copyright © 2008-2009 Christopher Eby <kreed@kreed.org>
  *
  * This file is part of Inquest.
  *
@@ -16,110 +16,129 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <QBrush>
+#include "row.h"
 #include "tile.h"
 
-Tile::Tile(const QString &text, bool movable, bool visible)
-	: QGraphicsTextItem(text)
-	, _duplicatePairs(NULL)
-	, _currentPair(NULL)
-	, _moved(false)
-	, _correctShown(false)
+Tile::Tile(const QString &text, Tile *dup)
+	: QGraphicsSimpleTextItem(text)
+	, _row(NULL)
+	, _green(false)
 {
-	setMovable(movable);
-	setVisible(visible);
+	if (dup) {
+		_dup = dup->_dup ? dup->_dup : dup;
+		dup->_dup = this;
+	} else
+		_dup = NULL;
 }
 
-Tile::~Tile()
+void Tile::deleteLater()
 {
-	if (_duplicatePairs) {
-		_duplicatePairs->removeOne(_pair);
-		if (_duplicatePairs->isEmpty())
-			delete _duplicatePairs;
+	if (_dup) {
+		Tile *e = this;
+		while (e->_dup != this)
+			e = e->_dup;
+		e->_dup = _dup;
 	}
+
+	_defaultRow->removeOne(this);
+	emit removed(this);
+	QObject::deleteLater();
 }
 
 void Tile::mouseReleaseEvent(QGraphicsSceneMouseEvent *ev)
 {
-	_moved = true;
-	Tile *pair = testPair();
-	if (pair != _currentPair)
-		emit newPair(this, pair);
+	Row *row = checkRow();
+	if (row != _row) {
+		if (row)
+			row->bind();
+		else
+			_row->unbind();
+		emit newRow(row);
+	}
 	QGraphicsItem::mouseReleaseEvent(ev);
 }
 
-Tile *Tile::testPair() const
+Tile *Tile::check(int y)
 {
-	if (_moved) {
-		if (_duplicatePairs) {
-			foreach (Tile *dup, *_duplicatePairs)
-				if (dup->y() - 15 < y() && dup->y() + 25 > y())
-					return dup;
-		} else {
-			if (_pair->y() - 15 < y() && _pair->y() + 25 > y())
-				return _pair;
-		}
-	}
+	Tile *tile = this;
+
+	do {
+		if (tile->y() > y - 10 && tile->y() < y + 5 && !tile->_green)
+			return tile;
+	} while ((tile = tile->_dup) && tile != this);
+
 	return NULL;
 }
 
-void Tile::setPair(Tile *other)
+Row *Tile::checkRow()
 {
-	if (other == _currentPair)
+	Row *row = new Row;
+	Tile *checked;
+	Tile *curColTile = this;
+	int y = Tile::y();
+
+	do {
+		foreach (Tile *tile, *curColTile->_defaultRow)
+			if (tile == curColTile)
+				row->append(this);
+			else if ((checked = tile->check(y)))
+				row->append(checked);
+			else {
+				row->clear();
+				goto iter;
+			}
+		return row;
+	iter:;
+	} while ((curColTile = curColTile->_dup) && curColTile != this);
+
+	delete row;
+	return NULL;
+}
+
+void Tile::setRow(Row *row)
+{
+	if (_row == row)
 		return;
 
-	Tile *oldPair = _currentPair;
-	_currentPair = other;
+	Row *oldRow = _row;
+	_row = NULL;
 
-	if (oldPair && oldPair->_currentPair == this)
-		oldPair->setPair(NULL);
+	/* this can be a bit inefficient */
+	if (oldRow) {
+		oldRow->unbind();
+		oldRow->removeOne(this);
+	}
 
-	if (other && other->_currentPair != this)
-		other->setPair(this);
+	_row = row;
 
-	if (!other && _correctShown)
+	if (!row && _green)
 		showCorrect(false);
 }
 
 void Tile::showCorrect(bool shown)
 {
-	if (shown != _correctShown) {
-		setDefaultTextColor(shown ? QColor(0, 255, 0, 85) : Qt::black);
+	static const QBrush green = QBrush(QColor(0, 255, 0, 85));
+
+	if (shown != _green) {
+		setBrush(shown ? green : Qt::black);
 		setFlag(QGraphicsItem::ItemIsMovable, !shown);
-		_correctShown = shown;
+		_green = shown;
 		update();
 	}
 }
 
-void Tile::init(Tile *other, Tile *dupDef)
+QString Tile::entry() const
 {
-	_pair = other;
-	other->_pair = this;
-
-	if (dupDef) {
-		Tile *dupWord = dupDef->_pair;
-
-		if (dupDef->_duplicatePairs) {
-			_duplicatePairs = dupWord->_duplicatePairs;
-			other->_duplicatePairs = dupDef->_duplicatePairs;
-		} else {
-			_duplicatePairs = dupWord->_duplicatePairs = new QList<Tile*>;
-			_duplicatePairs->append(dupDef);
-			other->_duplicatePairs = dupDef->_duplicatePairs = new QList<Tile*>;
-			other->_duplicatePairs->append(dupWord);
-		}
-
-		_duplicatePairs->append(other);
-		other->_duplicatePairs->append(this);
-	}
-}
-
-bool Tile::lessThan(Tile *a, Tile *b)
-{
-	return a->toPlainText() < b->toPlainText();
+	QString result;
+	foreach (Tile *tile, *_defaultRow)
+		result += tile->text() + '\t';
+	result.chop(1);
+	return result;
 }
 
 void Tile::setMovable(bool movable)
 {
-	setFlag(QGraphicsItem::ItemIsMovable, movable && !_correctShown);
+	setFlag(QGraphicsItem::ItemIsMovable, movable && !_green);
 	_movable = movable;
 }

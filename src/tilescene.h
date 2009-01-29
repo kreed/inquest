@@ -1,5 +1,5 @@
 /*
- * Copyright © 2008 Christopher Eby <kreed@kreed.org>
+ * Copyright © 2008-2009 Christopher Eby <kreed@kreed.org>
  *
  * This file is part of Inquest.
  *
@@ -21,12 +21,10 @@
 
 #include <QGraphicsScene>
 
+class Col;
+class Row;
 class Tile;
-class TileGroup;
-template<class K, class V> class QPair;
 template<class T> class QList;
-
-typedef QPair<QString, QString> StringPair;
 
 class TileScene : public QGraphicsScene {
 	Q_OBJECT
@@ -38,27 +36,29 @@ public:
 	};
 
 	TileScene(QObject *parent = NULL);
-
-	QString stateFile() const;
 	void init();
 
-	inline TileGroup *words() const { return _words; }
-	inline TileGroup *meanings() const { return _meanings; }
+	void place();
+
+	QString stateFile() const;
 
 signals:
 	void countChanged(int correct, int remaining);
+	void addRemoveGroup(Col*);
 
 public slots:
 	void addOne();
 	void removeOne();
 	void checkAdvance();
+	void skip();
 	void fill();
-	void fillState();
+	void fillState(bool error = true);
 	bool fill(const QString&, bool showError = true);
 	void dump();
 	void dumpState();
 	void dump(const QString&);
 	void layout();
+	void reset();
 	void quitNow();
 	void setPlacement(PlacementMode);
 	void setPlacementAuto() { setPlacement(AutoCheck); }
@@ -66,26 +66,28 @@ public slots:
 	void setPlacementNo() { setPlacement(NoCheck); }
 
 protected slots:
-	void onPair(Tile*, Tile*);
-
-protected:
-	void mouseDoubleClickEvent(QGraphicsSceneMouseEvent*);
+	void onBind(Row*);
+	void setRowCount(int);
 
 private:
 	void add();
-	Tile *addTile(const QString &text, TileGroup *group);
+	Tile *addTile(const QString &text, Col *group);
+	void removeTile(Tile *tile);
+	void setColCount(int);
+	void updateCounts();
+	void shiftCorrectCount(int delta);
+	void reveal(bool show = true);
+	void stripCorrect();
 	void advance();
-	void reveal();
-	void updateCount();
-	void removeWord(Tile *tile);
 
-	int _groupSize;
+	int _colCount;
+	int _rowCount;
+	int _curRowCount;
 	int _correctCount;
 	PlacementMode _placeMode;
 
-	QList<StringPair> _bank;
-	TileGroup *_words;
-	TileGroup *_meanings;
+	QList<QString> _bank;
+	QList<Col*> _cols;
 };
 
 #endif

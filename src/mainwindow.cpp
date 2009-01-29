@@ -1,5 +1,5 @@
 /*
- * Copyright © 2008 Christopher Eby <kreed@kreed.org>
+ * Copyright © 2008-2009 Christopher Eby <kreed@kreed.org>
  *
  * This file is part of Inquest.
  *
@@ -16,45 +16,33 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "col.h"
 #include "mainwindow.h"
 #include <QAction>
 #include <QApplication>
-#include <QGraphicsView>
 #include <QMenuBar>
 #include <QToolBar>
-#include <QWheelEvent>
-#include "tilegroup.h"
 #include "tilescene.h"
+#include "tileview.h"
 
-MainWindow *mainWindow;
+MainWindow *MainWindow::instance = NULL;
 
-static void addToggle(QMenu *menu, const QString &text, QObject *recv,
-                      const char *member, QActionGroup *group = NULL, bool checked = true)
+static void addToggle(QMenu *menu, const QString &text,
+                      QObject *recv, const char *member,
+                      bool checked, QActionGroup *group = NULL)
 {
 	QAction *action = menu->addAction(text, recv, member);
 	action->setCheckable(true);
-	if (checked)
-		action->setChecked(true);
+	action->setChecked(checked);
 	if (group)
 		group->addAction(action);
 }
 
-static void addTileMenu(QMenu *parent, TileGroup *tiles, const QString &text)
-{
-	QMenu *menu = parent->addMenu(text);
-	addToggle(menu, "Movable", tiles, SLOT(toggleMovable()));
-	addToggle(menu, "Visible", tiles, SLOT(toggleVisible()));
-	menu->addSeparator()->setText("Order Mode");
-	QActionGroup *group = new QActionGroup(menu);
-	addToggle(menu, "Sort", tiles, SLOT(setSorted()), group, tiles->layoutMode() == TileGroup::Sort);
-	addToggle(menu, "Shuffle", tiles, SLOT(setShuffled()), group, tiles->layoutMode() == TileGroup::Shuffle);
-}
-
 MainWindow::MainWindow()
-	: QMainWindow()
-	, _scene(new TileScene(this))
-	, _view(new QGraphicsView(_scene))
 {
+	_scene = new TileScene(this);
+	_view = new TileView(_scene);
+
 	setCentralWidget(_view);
 
 	QMenuBar *menu = new QMenuBar(this);
@@ -80,13 +68,13 @@ MainWindow::MainWindow()
 
 
 	QMenu *view = menu->addMenu("View");
-    view->addAction("Zoom In\tCtrl+ScrollDown", this, SLOT(zoomIn()));
-    view->addAction("Zoom Out\tCtrl+ScrollUp", this, SLOT(zoomOut()));
+	view->addAction("Zoom In\tCtrl+ScrollDown", _view, SLOT(zoomIn()));
+	view->addAction("Zoom Out\tCtrl+ScrollUp", _view, SLOT(zoomOut()));
 
 	view->addSeparator();
 
-    view->addAction("Fewer Words\tShift+ScrollDown", _scene, SLOT(removeOne()));
-    view->addAction("More Words\tShift+ScrollUp", _scene, SLOT(addOne()));
+	view->addAction("Fewer Words\tShift+ScrollDown", _scene, SLOT(removeOne()));
+	view->addAction("More Words\tShift+ScrollUp", _scene, SLOT(addOne()));
 
 	view->addSeparator();
 
@@ -94,64 +82,64 @@ MainWindow::MainWindow()
 		->setShortcut(QKeySequence(QKeySequence::Refresh));
 
 
-	QMenu *settings = menu->addMenu("Settings");
+	QMenu *tiles = menu->addMenu("Tiles");
+	tiles->addAction("Reset", _scene, SLOT(reset()))
+		->setShortcut(QKeySequence("Backspace"));
+	tiles->addAction("Check/Proceed", _scene, SLOT(checkAdvance()))
+		->setShortcut(QKeySequence("Space"));
+	tiles->addAction("Skip", _scene, SLOT(skip()))
+		->setShortcut(QKeySequence("Tab"));
 
-	addTileMenu(settings, _scene->words(), "Words");
-	addTileMenu(settings, _scene->meanings(), "Meanings");
 
-	settings->addSeparator()->setText("Checking Mode");
+	_settingsMenu = menu->addMenu("Settings");
+
+	_settingsMenu->addSeparator()->setText("Checking Mode");
 
 	QActionGroup *group = new QActionGroup(this);
-	addToggle(settings, "Check on Place", _scene, SLOT(setPlacementAuto()), group);
-	addToggle(settings, "Check on Space Press", _scene, SLOT(setPlacementManual()), group, false);
-	addToggle(settings, "Check when All Correct", _scene, SLOT(setPlacementNo()), group, false);
+	addToggle(_settingsMenu, "Check on Place", _scene, SLOT(setPlacementAuto()), true, group);
+	addToggle(_settingsMenu, "Check on Space Press", _scene, SLOT(setPlacementManual()), false, group);
+	addToggle(_settingsMenu, "Check when All Correct", _scene, SLOT(setPlacementNo()), false, group);
 
-
-	menu->addAction("Check/Advance", _scene, SLOT(checkAdvance()))
-		->setShortcut(QKeySequence("Space"));
+	_settingsMenu->addSeparator();
 
 	_count = menu->addAction("", _scene, SLOT(checkAdvance()));
 	connect(_scene, SIGNAL(countChanged(int, int)),
 	        this, SLOT(updateCount(int, int)));
 
+	connect(_scene, SIGNAL(addRemoveGroup(Col*)),
+	        this, SLOT(addRemoveMenu(Col*)));
+
 	setMenuBar(menu);
 
 	_scene->init();
 
-	mainWindow = this;
+	instance = this;
 }
 
-void MainWindow::zoomIn()
+void MainWindow::addRemoveMenu(Col *tiles)
 {
-	_view->scale(1.2, 1.2);
-}
-
-void MainWindow::zoomOut()
-{
-	_view->scale(0.8, 0.8);
-}
-
-void MainWindow::wheelEvent(QWheelEvent *ev)
-{
-	if (ev->orientation() == Qt::Vertical) {
-		if (ev->modifiers() & Qt::ControlModifier) {
-			if (ev->delta() < 0)
-				zoomOut();
-			else
-				zoomIn();
-			ev->accept();
-		} else if (ev->modifiers() & Qt::ShiftModifier) {
-			if (ev->delta() < 0)
-				_scene->removeOne();
-			else
-				_scene->addOne();
-			ev->accept();
-		}
+	if (tiles) {
+		QMenu *menu = _settingsMenu->addMenu(QString("Column %1").arg(tiles->index() + 1));
+		addToggle(menu, "Movable", tiles, SLOT(toggleMovable()), tiles->movable());
+		addToggle(menu, "Visible", tiles, SLOT(toggleVisible()), tiles->visible());
+		menu->addSeparator()->setText("Order Mode");
+		QActionGroup *group = new QActionGroup(menu);
+		addToggle(menu, "Sort", tiles, SLOT(setSorted()), tiles->layoutMode() == Col::Sort, group);
+		addToggle(menu, "Shuffle", tiles, SLOT(setShuffled()), tiles->layoutMode() == Col::Shuffle, group);
+		_groups.append(menu->menuAction());
 	} else
-		QMainWindow::wheelEvent(ev);
+		_settingsMenu->removeAction(_groups.takeLast());
 }
 
 void MainWindow::updateCount(int correct, int remaining)
 {
-	_count->setText(QString("%1/%2").arg(correct).arg(remaining));
+	QString text = QString("%2/%1").arg(remaining);
+	text = correct == -1 ? text.arg("??") : text.arg(correct);
+	_count->setText(text);
+}
+
+void MainWindow::resizeEvent(QResizeEvent *ev)
+{
+	_view->fit(_scene->sceneRect());
+	QMainWindow::resizeEvent(ev);
 }

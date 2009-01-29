@@ -1,5 +1,5 @@
 /*
- * Copyright © 2008 Christopher Eby <kreed@kreed.org>
+ * Copyright © 2009 Christopher Eby <kreed@kreed.org>
  *
  * This file is part of Inquest.
  *
@@ -16,16 +16,42 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <ctime>
-#include "mainwindow.h"
-#include <QApplication>
+#include "row.h"
+#include "tile.h"
 
-int main(int argc, char **argv)
+void Row::destroyTiles()
 {
-	srand(time(NULL));
-	QApplication app(argc, argv);
-	MainWindow win;
-	win.show();
-	win.resize(400, 500);
-	return app.exec();
+	foreach (Tile *tile, *this)
+		tile->deleteLater();
+}
+
+void Row::bind()
+{
+	foreach (Tile *tile, *this)
+		tile->setRow(this);
+}
+
+void Row::unbind()
+{
+	foreach (Tile *tile, *this)
+		tile->setRow(NULL);
+}
+
+void Row::makeDefault()
+{
+	foreach (Tile *tile, *this)
+		tile->_defaultRow = this;
+}
+
+void Row::removeOne(Tile *tile)
+{
+	QList<Tile*>::removeOne(tile);
+	if (isEmpty())
+		delete this;
+}
+
+void Row::showCorrect()
+{
+	foreach (Tile *tile, *this)
+		tile->showCorrect();
 }

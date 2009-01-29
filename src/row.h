@@ -1,5 +1,5 @@
 /*
- * Copyright © 2008-2009 Christopher Eby <kreed@kreed.org>
+ * Copyright © 2009 Christopher Eby <kreed@kreed.org>
  *
  * This file is part of Inquest.
  *
@@ -16,41 +16,21 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef MAINWINDOW_H
-#define MAINWINDOW_H
+#ifndef ROW_H
+#define ROW_H
 
-#include <QMainWindow>
+#include <QList>
 
-class Col;
-class QAction;
-class QGraphicsView;
-class QMenu;
-class TileScene;
-class TileView;
-template<class T> class QList;
+class Tile;
 
-class MainWindow : public QMainWindow {
-	Q_OBJECT
+class Row : public QList<Tile*> {
 public:
-	MainWindow();
-
-	static MainWindow *instance;
-
-public slots:
-	void updateCount(int correct, int remaining);
-
-protected slots:
-	void addRemoveMenu(Col*);
-
-protected:
-	void resizeEvent(QResizeEvent*);
-
-private:
-	QAction *_count;
-	QList<QAction*> _groups;
-	QMenu *_settingsMenu;
-	TileScene *_scene;
-	TileView *_view;
+	void destroyTiles();
+	void makeDefault();
+	void bind();
+	void unbind();
+	void removeOne(Tile*);
+	void showCorrect();
 };
 
 #endif
