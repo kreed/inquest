@@ -22,7 +22,9 @@
 
 Tile::Tile(const QString &text, Tile *dup)
 	: QGraphicsSimpleTextItem(text)
+	, _defaultRow(NULL)
 	, _row(NULL)
+	, _movable(false)
 	, _green(false)
 {
 	if (dup) {

@@ -33,6 +33,7 @@ TileScene::TileScene(QObject *parent)
 	, _colCount(0)
 	, _rowCount(16)
 	, _curRowCount(0)
+	, _correctCount(0)
 	, _placeMode(AutoCheck)
 {
 	connect(qApp, SIGNAL(lastWindowClosed()),
