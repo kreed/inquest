@@ -19,18 +19,30 @@
 #ifndef ROW_H
 #define ROW_H
 
-#include <QList>
+#include <QObject>
 
 class Tile;
+template<class T> class QList;
 
-class Row : public QList<Tile*> {
+class Row : public QObject, private QList<Tile*> {
+	Q_OBJECT
 public:
+	void add(Tile*);
 	void destroyTiles();
 	void makeDefault();
 	void bind();
 	void unbind();
-	void removeOne(Tile*);
 	void showCorrect();
+	QString entry() const;
+
+signals:
+	void newRow(Row*);
+
+public slots:
+	void checkRow(Tile*);
+	void remove(Tile*);
 };
+
+QDataStream &operator<<(QDataStream&, const Row*);
 
 #endif

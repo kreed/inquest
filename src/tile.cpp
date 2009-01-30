@@ -43,21 +43,13 @@ void Tile::deleteLater()
 		e->_dup = _dup;
 	}
 
-	_defaultRow->removeOne(this);
 	emit removed(this);
 	QObject::deleteLater();
 }
 
 void Tile::mouseReleaseEvent(QGraphicsSceneMouseEvent *ev)
 {
-	Row *row = checkRow();
-	if (row != _row) {
-		if (row)
-			row->bind();
-		else
-			_row->unbind();
-		emit newRow(row);
-	}
+	emit dropped(this);
 	QGraphicsItem::mouseReleaseEvent(ev);
 }
 
@@ -73,49 +65,23 @@ Tile *Tile::check(int y)
 	return NULL;
 }
 
-Row *Tile::checkRow()
+void Tile::unbind()
 {
-	Row *row = new Row;
-	Tile *checked;
-	Tile *curColTile = this;
-	int y = Tile::y();
-
-	do {
-		foreach (Tile *tile, *curColTile->_defaultRow)
-			if (tile == curColTile)
-				row->append(this);
-			else if ((checked = tile->check(y)))
-				row->append(checked);
-			else {
-				row->clear();
-				goto iter;
-			}
-		return row;
-	iter:;
-	} while ((curColTile = curColTile->_dup) && curColTile != this);
-
-	delete row;
-	return NULL;
-}
-
-void Tile::setRow(Row *row)
-{
-	if (_row == row)
+	if (!_row)
 		return;
 
-	Row *oldRow = _row;
 	_row = NULL;
 
-	/* this can be a bit inefficient */
-	if (oldRow) {
-		oldRow->unbind();
-		oldRow->removeOne(this);
-	}
+	if (_green)
+		showCorrect(false);
+}
+
+void Tile::bind(Row *row)
+{
+	if (_row)
+		_row->unbind();
 
 	_row = row;
-
-	if (!row && _green)
-		showCorrect(false);
 }
 
 void Tile::showCorrect(bool shown)
@@ -128,15 +94,6 @@ void Tile::showCorrect(bool shown)
 		_green = shown;
 		update();
 	}
-}
-
-QString Tile::entry() const
-{
-	QString result;
-	foreach (Tile *tile, *_defaultRow)
-		result += tile->text() + '\t';
-	result.chop(1);
-	return result;
 }
 
 void Tile::setMovable(bool movable)

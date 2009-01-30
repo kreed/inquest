@@ -33,33 +33,34 @@ public:
 	inline bool isCorrect() const { return _row; }
 	inline bool isShownCorrect() const { return _green; }
 	inline Row *defaultRow() const { return _defaultRow; }
-	QString entry() const;
+	inline Row *row() const { return _row; }
+	inline Tile *dup() const { return _dup; }
 
 	/* We don't call this ourselves; the TileScene tells us to show correct */
 	void showCorrect(bool shown = true);
-	void setRow(Row*);
 	void setMovable(bool);
+	void bind(Row*);
+	void unbind();
+
+	Tile *check(int y);
+
+	inline void makeDefault(Row *row) { _defaultRow = row; }
 
 	static bool lessThan(Tile *a, Tile *b) { return a->text() < b->text(); }
 
 signals:
-	void newRow(Row*);
+	void dropped(Tile*);
 	void removed(Tile*);
 
 protected:
 	void mouseReleaseEvent(QGraphicsSceneMouseEvent*);
 
 private:
-	Tile *check(int y);
-	Row *checkRow();
-
 	Row *_defaultRow;
 	Row *_row;
 	Tile *_dup;
 	bool _movable;
 	bool _green;
-
-	friend class Row;
 };
 
 #endif

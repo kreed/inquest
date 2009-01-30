@@ -17,6 +17,7 @@
  */
 
 #include "col.h"
+#include "row.h"
 #include "tile.h"
 #include "tilescene.h"
 
@@ -29,8 +30,6 @@ Col::Col(TileScene *parent, int group, LayoutMode mode)
 	, _height(0)
 	, _width(0)
 {
-	connect(this, SIGNAL(layoutChanged()),
-	        parent, SLOT(layout()));
 }
 
 Tile *Col::find(const QString &text)
@@ -137,7 +136,7 @@ void Col::place(int xoffset, int yoffset)
 void Col::reset()
 {
 	foreach (Tile *tile, _tiles)
-		tile->setRow(NULL);
+		tile->row()->unbind();
 }
 
 Tile *Col::randTile()

@@ -163,7 +163,7 @@ void TileScene::dump(const QString &file)
 		out << entry << '\n';
 	foreach(Tile *tile, *_cols.at(0)->tiles())
 		if (!tile->isShownCorrect())
-			out << tile->entry() << '\n';
+			out << tile->defaultRow() << '\n';
 
 	store.close();
 }
@@ -177,11 +177,9 @@ void TileScene::advance()
 	layout();
 }
 
-Tile *TileScene::addTile(const QString &text, Col *group)
+Tile *TileScene::addTile(const QString &text, Col *col)
 {
-	Tile *tile = group->addTile(text);
-	connect(tile, SIGNAL(newRow(Row*)),
-	        this, SLOT(onBind(Row*)));
+	Tile *tile = col->addTile(text);
 	addItem(tile);
 	return tile;
 }
@@ -192,8 +190,10 @@ void TileScene::add()
 		QStringList entry = _bank.takeAt(rand() % _bank.size()).split('\t');
 		Row *row = new Row;
 		for (int i = 0; i != _colCount; ++i)
-			row->append(addTile(entry[i], _cols[i]));
+			row->add(addTile(entry[i], _cols[i]));
 		row->makeDefault();
+		connect(row, SIGNAL(newRow(Row*)),
+		        this, SLOT(onBind(Row*)));
 	}
 
 	place();
@@ -262,7 +262,7 @@ void TileScene::skip()
 {
 	foreach (Tile *tile, *_cols.at(0)->tiles())
 		if (!tile->isShownCorrect())
-			_bank.append(tile->entry());
+			_bank.append(tile->defaultRow()->entry());
 	advance();
 }
 
@@ -296,7 +296,7 @@ void TileScene::removeOne()
 	if (_curRowCount > 1) {
 		Tile *tile = _cols.at(0)->randTile();
 		if (!tile->isShownCorrect())
-			_bank.append(tile->entry());
+			_bank.append(tile->defaultRow()->entry());
 		removeTile(tile);
 		_rowCount = _curRowCount;
 		place();
@@ -315,6 +315,8 @@ void TileScene::setColCount(int count)
 	if (count > _colCount)
 		for (int i = _colCount; i != count; ++i) {
 			Col *col = new Col(this, i, i ? Col::Shuffle : Col::Sort);
+			connect(col, SIGNAL(layoutChanged()),
+			        this, SLOT(layout()));
 			_cols.append(col);
 			emit addRemoveGroup(col);
 		}
