@@ -140,7 +140,7 @@ void TileScene::dump()
 {
 	QString file = QFileDialog::getSaveFileName(MainWindow::instance, QString(), QString(), "Tab-separated values (*.tsv)");
 	if (!file.isEmpty())
-		dump();
+		dump(file);
 }
 
 void TileScene::dumpState()
@@ -163,7 +163,7 @@ void TileScene::dump(const QString &file)
 		out << entry << '\n';
 	foreach(Tile *tile, *_cols.at(0)->tiles())
 		if (!tile->isShownCorrect())
-			out << tile->defaultRow() << '\n';
+			out << tile->defaultRow()->entry() << '\n';
 
 	store.close();
 }
