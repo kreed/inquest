@@ -127,7 +127,8 @@ bool TileScene::fill(const QString &file, bool showError)
 	do {
 		if (line.count('\t') >= count)
 			_bank.append(line);
-	} while (!(line = in.readLine()).isEmpty());
+		line = in.readLine();
+	} while (!in.atEnd());
 
 	store.close();
 
